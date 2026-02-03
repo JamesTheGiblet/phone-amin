@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>FingAR - AR Finger Sketch</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background: #000;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            opacity: 0.7;
+        }
+        
+        #outputCanvas, #drawCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        #drawCanvas {
+            z-index: 10;
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding: 0 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 100px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn:active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(0.95);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .color-picker {
+            position: absolute;
+            bottom: 100px;
+            left: 0;
+            right: 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            z-index: 100;
+        }
+        
+        .color-option {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid white;
+            cursor: pointer;
+            transition: transform 0.2s;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .color-option.active {
+            transform: scale(1.3);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.9);
+        }
+        
+        .status {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: white;
+            font-size: 14px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .status.error {
+            background: rgba(220, 38, 38, 0.8);
+            color: white;
+        }
+        
+        .status.success {
+            background: rgba(34, 197, 94, 0.8);
+            color: white;
+        }
+        
+        .permission-prompt {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 2000;
+            max-width: 90%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .permission-prompt h2 {
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+        
+        .permission-prompt p {
+            margin-bottom: 15px;
+            font-size: 16px;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+        
+        .permission-prompt button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.2s;
+        }
+        
+        .permission-prompt button:active {
+            transform: scale(0.95);
+            background: #2563eb;
+        }
+        
+        .instruction {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            max-width: 90%;
+            display: none;
+        }
+        
+        .instruction h3 {
+            margin-bottom: 15px;
+            font-size: 24px;
+        }
+        
+        .instruction p {
+            margin-bottom: 10px;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 5px 10px;
+        }
+        
+        @media (max-width: 600px) {
+            .btn {
+                padding: 10px 20px;
+                font-size: 14px;
+                min-width: 80px;
+            }
+            
+            .controls {
+                gap: 10px;
+                padding: 0 10px;
+            }
+            
+            .color-option {
+                width: 35px;
+                height: 35px;
+            }
+            
+            .permission-prompt {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="outputCanvas"></canvas>
+        <canvas id="drawCanvas"></canvas>
+        
+        <div class="status" id="status">Loading...</div>
+        
+        <div class="permission-prompt" id="permissionPrompt">
+            <h2>📷 Camera Access Required</h2>
+            <p>FingAR needs camera access to track your hand gestures and let you draw in AR.</p>
+            <p><strong>How to grant permission:</strong></p>
+            <p>1. Click "Enable Camera" below</p>
+            <p>2. Allow camera access when prompted by your browser</p>
+            <p>3. If blocked, check your browser settings to enable camera permissions</p>
+            <button id="enableCameraBtn">🎥 Enable Camera</button>
+        </div>
+        
+        <div class="instruction" id="instruction">
+            <button class="close-btn" onclick="closeInstruction()">×</button>
+            <h3>🎨 FingAR Instructions</h3>
+            <p>👆 <strong>Pinch</strong> your index finger and thumb together to draw</p>
+            <p>🎨 <strong>Tap colors</strong> below to change drawing color</p>
+            <p>🗑️ <strong>Clear</strong> to start over</p>
+            <p>↩️ <strong>Undo</strong> to remove last stroke</p>
+            <p>📷 <strong>Flip</strong> to switch camera</p>
+            <p>✨ <strong>AR Mode</strong> dims camera for clearer drawings</p>
+        </div>
+        
+        <div class="controls">
+            <button class="btn" id="clearBtn">🗑️ Clear</button>
+            <button class="btn" id="undoBtn">↩️ Undo</button>
+            <button class="btn" id="cameraBtn">📷 Flip</button>
+            <button class="btn" id="arBtn">✨ AR</button>
+            <button class="btn" id="helpBtn">❓ Help</button>
+        </div>
+        
+        <div class="color-picker" id="colorPicker">
+            <div class="color-option active" style="background: #ff0000;" data-color="#ff0000"></div>
+            <div class="color-option" style="background: #00ff00;" data-color="#00ff00"></div>
+            <div class="color-option" style="background: #0000ff;" data-color="#0000ff"></div>
+            <div class="color-option" style="background: #ffff00;" data-color="#ffff00"></div>
+            <div class="color-option" style="background: #ff00ff;" data-color="#ff00ff"></div>
+            <div class="color-option" style="background: #00ffff;" data-color="#00ffff"></div>
+            <div class="color-option" style="background: #ffffff;" data-color="#ffffff"></div>
+        </div>
+    </div>
+
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script>
+        // Global variables
+        let video, outputCanvas, drawCanvas;
+        let outputCtx, drawCtx;
+        let hands = null;
+        let camera = null;
+        let isDrawing = false;
+        let currentColor = '#ff0000';
+        let lineWidth = 8;
+        let useBackCamera = false;
+        let isARMode = false;
+        let drawingHistory = [];
+        let lastPoint = { x: 0, y: 0 };
+        let currentStroke = [];
+        let cameraPermissionGranted = false;
+        
+        // Initialize app
+        async function init() {
+            // Get DOM elements
+            video = document.getElementById('video');
+            outputCanvas = document.getElementById('outputCanvas');
+            drawCanvas = document.getElementById('drawCanvas');
+            outputCtx = outputCanvas.getContext('2d');
+            drawCtx = drawCanvas.getContext('2d');
+            
+            // Set canvas sizes to match screen
+            resizeCanvas();
+            
+            // Setup event listeners first
+            setupEventListeners();
+            
+            // Check if camera permission already granted
+            try {
+                const permissionStatus = await navigator.permissions.query({ name: 'camera' });
+                
+                if (permissionStatus.state === 'granted') {
+                    document.getElementById('permissionPrompt').style.display = 'none';
+                    await initializeApp();
+                } else {
+                    // Show permission prompt
+                    document.getElementById('permissionPrompt').style.display = 'block';
+                }
+                
+                permissionStatus.onchange = () => {
+                    if (permissionStatus.state === 'granted' && !cameraPermissionGranted) {
+                        document.getElementById('permissionPrompt').style.display = 'none';
+                        initializeApp();
+                    }
+                };
+            } catch (error) {
+                // Permissions API not supported, just try to initialize
+                console.log('Permissions API not supported, requesting camera directly');
+                document.getElementById('permissionPrompt').style.display = 'block';
+            }
+        }
+        
+        // Initialize the main app after camera permission
+        async function initializeApp() {
+            if (cameraPermissionGranted) return; // Already initialized
+            
+            updateStatus("Loading hand tracking model...");
+            
+            try {
+                // Initialize MediaPipe Hands
+                hands = new Hands({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                    }
+                });
+                
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+                
+                hands.onResults(onResults);
+                
+                // Start camera
+                await startCamera();
+                
+                cameraPermissionGranted = true;
+                updateStatus("Ready! Pinch fingers to draw 👆", 'success');
+                
+                // Show instructions after 1 second
+                setTimeout(() => {
+                    document.getElementById('instruction').style.display = 'block';
+                }, 1000);
+                
+            } catch (error) {
+                handleError(error);
+            }
+        }
+        
+        // Handle camera permission request
+        async function requestCameraPermission() {
+            try {
+                updateStatus("Requesting camera access...");
+                await initializeApp();
+            } catch (error) {
+                handleError(error);
+            }
+        }
+        
+        // Start camera with MediaPipe
+        async function startCamera() {
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: useBackCamera ? 'environment' : 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        video.play().then(resolve).catch(reject);
+                    };
+                    video.onerror = reject;
+                });
+                
+                // Initialize camera for MediaPipe
+                if (camera) {
+                    camera.stop();
+                }
+                
+                camera = new Camera(video, {
+                    onFrame: async () => {
+                        if (hands) {
+                            await hands.send({image: video});
+                        }
+                    },
+                    width: 1280,
+                    height: 720
+                });
+                
+                camera.start();
+                
+            } catch (error) {
+                throw error;
+            }
+        }
+        
+        // Process hand detection results
+        function onResults(results) {
+            // Clear debug canvas
+            outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+            
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Get finger landmarks (MediaPipe uses normalized coordinates)
+                const indexTip = landmarks[8];   // Index finger tip
+                const thumbTip = landmarks[4];   // Thumb tip
+                
+                // Convert to screen coordinates
+                const indexPos = {
+                    x: indexTip.x * outputCanvas.width,
+                    y: indexTip.y * outputCanvas.height
+                };
+                
+                const thumbPos = {
+                    x: thumbTip.x * outputCanvas.width,
+                    y: thumbTip.y * outputCanvas.height
+                };
+                
+                // Calculate pinch distance
+                const distance = Math.sqrt(
+                    Math.pow(indexPos.x - thumbPos.x, 2) + 
+                    Math.pow(indexPos.y - thumbPos.y, 2)
+                );
+                
+                // Pinch detection (drawing gesture)
+                const pinchThreshold = 50;
+                
+                if (distance < pinchThreshold) {
+                    if (!isDrawing) {
+                        // Start new stroke
+                        isDrawing = true;
+                        currentStroke = [];
+                        drawCtx.beginPath();
+                        drawCtx.moveTo(indexPos.x, indexPos.y);
+                        lastPoint = indexPos;
+                        
+                        currentStroke.push({
+                            type: 'start',
+                            x: indexPos.x,
+                            y: indexPos.y,
+                            color: currentColor,
+                            width: lineWidth
+                        });
+                    } else {
+                        // Continue drawing
+                        drawCtx.strokeStyle = currentColor;
+                        drawCtx.lineWidth = lineWidth;
+                        drawCtx.lineTo(indexPos.x, indexPos.y);
+                        drawCtx.stroke();
+                        
+                        currentStroke.push({
+                            type: 'line',
+                            x: indexPos.x,
+                            y: indexPos.y
+                        });
+                        
+                        lastPoint = indexPos;
+                    }
+                    
+                    // Draw pinch indicator
+                    outputCtx.fillStyle = 'rgba(0, 255, 0, 0.6)';
+                    outputCtx.beginPath();
+                    outputCtx.arc(indexPos.x, indexPos.y, 20, 0, Math.PI * 2);
+                    outputCtx.fill();
+                    
+                } else {
+                    if (isDrawing) {
+                        // End stroke
+                        isDrawing = false;
+                        if (currentStroke.length > 0) {
+                            drawingHistory.push([...currentStroke]);
+                        }
+                        currentStroke = [];
+                    }
+                    
+                    // Draw finger indicators
+                    outputCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                    outputCtx.beginPath();
+                    outputCtx.arc(indexPos.x, indexPos.y, 15, 0, Math.PI * 2);
+                    outputCtx.fill();
+                    
+                    outputCtx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                    outputCtx.beginPath();
+                    outputCtx.arc(thumbPos.x, thumbPos.y, 15, 0, Math.PI * 2);
+                    outputCtx.fill();
+                }
+            }
+        }
+        
+        // Resize canvas to match screen
+        function resizeCanvas() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            outputCanvas.width = width;
+            outputCanvas.height = height;
+            drawCanvas.width = width;
+            drawCanvas.height = height;
+            
+            // Set drawing context properties
+            drawCtx.lineCap = 'round';
+            drawCtx.lineJoin = 'round';
+            drawCtx.lineWidth = lineWidth;
+            
+            // Redraw if there's history
+            if (drawingHistory.length > 0) {
+                redrawHistory();
+            }
+        }
+        
+        // Setup event listeners
+        function setupEventListeners() {
+            // Window resize
+            window.addEventListener('resize', resizeCanvas);
+            window.addEventListener('orientationchange', () => {
+                setTimeout(resizeCanvas, 100);
+            });
+            
+            // Permission button
+            document.getElementById('enableCameraBtn').addEventListener('click', requestCameraPermission);
+            
+            // Control buttons
+            document.getElementById('clearBtn').addEventListener('click', clearCanvas);
+            document.getElementById('undoBtn').addEventListener('click', undoLast);
+            document.getElementById('cameraBtn').addEventListener('click', flipCamera);
+            document.getElementById('arBtn').addEventListener('click', toggleARMode);
+            document.getElementById('helpBtn').addEventListener('click', showHelp);
+            
+            // Color picker
+            document.querySelectorAll('.color-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    document.querySelectorAll('.color-option').forEach(opt => 
+                        opt.classList.remove('active'));
+                    option.classList.add('active');
+                    currentColor = option.dataset.color;
+                    updateStatus(`Color changed`, 'success');
+                });
+            });
+        }
+        
+        // Control functions
+        function clearCanvas() {
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            drawingHistory = [];
+            currentStroke = [];
+            updateStatus("Canvas cleared", 'success');
+        }
+        
+        function undoLast() {
+            if (drawingHistory.length === 0) {
+                updateStatus("Nothing to undo");
+                return;
+            }
+            
+            // Remove last stroke
+            drawingHistory.pop();
+            
+            // Clear and redraw
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            redrawHistory();
+            
+            updateStatus("Undo last stroke", 'success');
+        }
+        
+        function redrawHistory() {
+            drawingHistory.forEach(stroke => {
+                if (stroke.length > 0) {
+                    const start = stroke[0];
+                    drawCtx.beginPath();
+                    drawCtx.strokeStyle = start.color;
+                    drawCtx.lineWidth = start.width;
+                    drawCtx.moveTo(start.x, start.y);
+                    
+                    for (let i = 1; i < stroke.length; i++) {
+                        if (stroke[i].type === 'line') {
+                            drawCtx.lineTo(stroke[i].x, stroke[i].y);
+                            drawCtx.stroke();
+                        }
+                    }
+                }
+            });
+        }
+        
+        async function flipCamera() {
+            if (!cameraPermissionGranted) return;
+            
+            useBackCamera = !useBackCamera;
+            updateStatus("Flipping camera...");
+            
+            // Stop current camera
+            if (camera) {
+                camera.stop();
+            }
+            
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            
+            // Restart with new camera
+            try {
+                await startCamera();
+                updateStatus(useBackCamera ? "Back camera" : "Front camera", 'success');
+            } catch (error) {
+                handleError(error);
+            }
+        }
+        
+        function toggleARMode() {
+            isARMode = !isARMode;
+            video.style.opacity = isARMode ? '0.3' : '0.7';
+            document.getElementById('arBtn').textContent = isARMode ? '📸 Normal' : '✨ AR';
+            updateStatus(isARMode ? "AR Mode" : "Normal Mode", 'success');
+        }
+        
+        function showHelp() {
+            document.getElementById('instruction').style.display = 'block';
+        }
+        
+        // UI Helper functions
+        function updateStatus(message, type = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status';
+            if (type) {
+                statusEl.classList.add(type);
+            }
+        }
+        
+        function closeInstruction() {
+            document.getElementById('instruction').style.display = 'none';
+        }
+        
+        function handleError(error) {
+            console.error('Error:', error);
+            
+            let message = "Error: ";
+            
+            if (error.name === 'NotAllowedError') {
+                message = "❌ Camera permission denied. Please enable camera in browser settings.";
+            } else if (error.name === 'NotFoundError') {
+                message = "❌ No camera found on this device.";
+            } else if (error.name === 'NotReadableError') {
+                message = "❌ Camera is in use by another app.";
+            } else if (error.message) {
+                message += error.message;
+            } else {
+                message += "Something went wrong. Please refresh and try again.";
+            }
+            
+            updateStatus(message, 'error');
+            document.getElementById('permissionPrompt').style.display = 'block';
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
